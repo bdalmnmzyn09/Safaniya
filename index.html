@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>خطباء الجمعة - قرية صفانية</title>
+    
+    <!-- استيراد TailwindCSS للتصميم -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- استيراد خط تجوال من Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- استيراد مكتبة Leaflet للخرائط -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <!-- إعدادات Tailwind للوضع المظلم والخطوط -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Tajawal', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            500: '#10B981', // لون أخضر زمردي
+                            600: '#059669',
+                            900: '#064E3B',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* تخصيصات إضافية */
+        body {
+            transition: background-color 0.3s, color 0.3s;
+        }
+        #map {
+            height: 400px;
+            width: 100%;
+            border-radius: 0.5rem;
+            z-index: 1;
+        }
+        /* تحسين شكل الخريطة في الوضع المظلم */
+        .dark .leaflet-layer,
+        .dark .leaflet-control-zoom-in,
+        .dark .leaflet-control-zoom-out,
+        .dark .leaflet-control-attribution {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 dark:bg-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+
+    <!-- الهيدر -->
+    <header class="bg-brand-600 dark:bg-gray-800 shadow-lg text-white sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-xl md:text-2xl font-bold flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+                </svg>
+                خطباء صفانية
+            </h1>
+            
+            <button id="themeToggle" class="p-2 rounded-full hover:bg-white/20 transition focus:outline-none" aria-label="تبديل الوضع المظلم">
+                <!-- أيقونة الشمس -->
+                <svg id="sunIcon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                <!-- أيقونة القمر -->
+                <svg id="moonIcon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- المحتوى الرئيسي -->
+    <main class="container mx-auto px-4 py-8 flex-grow">
+        
+        <!-- قسم التاريخ القادم -->
+        <section class="text-center mb-10 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border-b-4 border-brand-500">
+            <h2 class="text-lg text-gray-500 dark:text-gray-400 font-medium mb-2">موعد صلاة الجمعة القادمة</h2>
+            <div id="nextFridayDate" class="text-3xl md:text-4xl font-bold text-brand-600 dark:text-brand-500">
+                جاري الحساب...
+            </div>
+            <div id="countdown" class="text-sm text-gray-400 mt-2"></div>
+        </section>
+
+        <!-- قسم البحث -->
+        <section class="mb-8">
+            <div class="relative">
+                <input type="text" id="searchInput" 
+                    class="w-full p-4 pr-12 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500 outline-none shadow-sm transition" 
+                    placeholder="ابحث باسم المسجد، اسم الخطيب، أو موضوع الخطبة...">
+                <div class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-gray-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+            </div>
+        </section>
+
+        <!-- قائمة المساجد والخطب الحالية -->
+        <section class="mb-12">
+            <h2 class="text-2xl font-bold mb-6 border-r-4 border-brand-500 pr-3">خطباء الجمعة القادمة</h2>
+            <div id="mosquesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- سيتم ملء الكروت هنا بواسطة JS -->
+                <div class="text-center col-span-full text-gray-500 py-10">جاري تحميل البيانات...</div>
+            </div>
+        </section>
+
+        <!-- الخريطة -->
+        <section class="mb-12">
+            <h2 class="text-2xl font-bold mb-6 border-r-4 border-brand-500 pr-3">خريطة المساجد</h2>
+            <div class="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-md">
+                <div id="map"></div>
+            </div>
+        </section>
+
+        <!-- الأرشيف (History) -->
+        <section class="mb-8">
+            <h2 class="text-2xl font-bold mb-6 border-r-4 border-brand-500 pr-3">أرشيف الخطب السابقة</h2>
+            <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                <table class="w-full text-right">
+                    <thead class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 uppercase text-sm leading-normal">
+                        <tr>
+                            <th class="py-3 px-6">التاريخ</th>
+                            <th class="py-3 px-6">المسجد</th>
+                            <th class="py-3 px-6">الخطيب</th>
+                            <th class="py-3 px-6">الموضوع</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody" class="text-gray-600 dark:text-gray-300 text-sm font-light">
+                        <!-- صفوف الجدول -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- الفوتر -->
+    <footer class="bg-gray-800 text-white py-6 mt-auto">
+        <div class="container mx-auto px-4 text-center">
+            <p class="mb-2">دليل مساجد صفانية &copy; <span id="year"></span></p>
+            <p class="text-sm text-gray-400">نسألكم الدعاء</p>
+        </div>
+    </footer>
+
+    <!-- ملف السكربت -->
+    <script>
+        // --- 1. البيانات (JSON Simulation) ---
+        // في الواقع هذا الجزء يكون داخل ملف data.json ويتم استدعاؤه بـ fetch
+        const DATA_SOURCE = {
+            "mosques": [
+                {
+                    "id": 1,
+                    "name": "مسجد النور",
+                    "khatib": "الشيخ أحمد محمود",
+                    "topic": "فضل صلة الرحم",
+                    "lat": 28.7100, // إحداثيات تقريبية لمنطقة المنيا/صفانية للتوضيح
+                    "lng": 30.7500
+                },
+                {
+                    "id": 2,
+                    "name": "الجامع الكبير",
+                    "khatib": "الشيخ محمد علي",
+                    "topic": "الاستعداد لشهر رمضان",
+                    "lat": 28.7120,
+                    "lng": 30.7520
+                },
+                {
+                    "id": 3,
+                    "name": "مسجد الرحمة",
+                    "khatib": "الشيخ إبراهيم حسن",
+                    "topic": "حق الجار",
+                    "lat": 28.7080,
+                    "lng": 30.7480
+                },
+                {
+                    "id": 4,
+                    "name": "مسجد التقوى",
+                    "khatib": "الشيخ مصطفى كمال",
+                    "topic": "الصدق والأمانة",
+                    "lat": 28.7140,
+                    "lng": 30.7540
+                },
+                {
+                    "id": 5,
+                    "name": "مسجد السلام",
+                    "khatib": "د. عمر خالد",
+                    "topic": "", // لا يوجد موضوع محدد
+                    "lat": 28.7090,
+                    "lng": 30.7560
+                }
+            ],
+            "history": [
+                {
+                    "date": "2023-10-20",
+                    "mosque": "مسجد النور",
+                    "khatib": "الشيخ أحمد محمود",
+                    "topic": "الصبر على البلاء"
+                },
+                {
+                    "date": "2023-10-20",
+                    "mosque": "الجامع الكبير",
+                    "khatib": "الشيخ محمد علي",
+                    "topic": "أهوال يوم القيامة"
+                },
+                {
+                    "date": "2023-10-13",
+                    "mosque": "مسجد الرحمة",
+                    "khatib": "الشيخ يوسف",
+                    "topic": "بر الوالدين"
+                }
+            ]
+        };
+
+        // دالة لمحاكاة جلب البيانات من ملف خارجي
+        async function fetchData() {
+            // هنا نستخدم البيانات المباشرة، ولكن في الحقيقة ستكون:
+            // const response = await fetch('data.json');
+            // return await response.json();
+            return new Promise((resolve) => {
+                setTimeout(() => resolve(DATA_SOURCE), 100); // تأخير بسيط لمحاكاة التحميل
+            });
+        }
+
+        // --- 2. إدارة الوضع المظلم (Dark Mode) ---
+        const themeToggleBtn = document.getElementById('themeToggle');
+        const sunIcon = document.getElementById('sunIcon');
+        const moonIcon = document.getElementById('moonIcon');
+        const htmlElement = document.documentElement;
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                htmlElement.classList.add('dark');
+                updateIcons(true);
+            } else {
+                htmlElement.classList.remove('dark');
+                updateIcons(false);
+            }
+        }
+
+        function updateIcons(isDark) {
+            if (isDark) {
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+            } else {
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+            }
+        }
+
+        themeToggleBtn.addEventListener('click', () => {
+            htmlElement.classList.toggle('dark');
+            const isDark = htmlElement.classList.contains('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateIcons(isDark);
+        });
+
+        // --- 3. حساب التاريخ ---
+        function getNextFriday() {
+            const today = new Date();
+            const dayOfWeek = today.getDay(); // الأحد = 0, الجمعة = 5
+            const daysUntilFriday = (5 + 7 - dayOfWeek) % 7;
+            
+            // إذا كان اليوم هو الجمعة (daysUntilFriday = 0)، نحتاج لمعرفة هل مرت الصلاة أم لا
+            // للتبسيط، إذا كان اليوم جمعة سنعتبر أنها الجمعة المقصودة
+            
+            const nextFriday = new Date(today);
+            nextFriday.setDate(today.getDate() + daysUntilFriday);
+
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            return nextFriday.toLocaleDateString('ar-EG', options);
+        }
+
+        // --- 4. العرض (Rendering) ---
+        function renderMosques(mosques) {
+            const container = document.getElementById('mosquesList');
+            container.innerHTML = '';
+
+            if (mosques.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center text-gray-500">لا توجد نتائج تطابق بحثك.</div>';
+                return;
+            }
+
+            mosques.forEach(mosque => {
+                const topicDisplay = mosque.topic ? mosque.topic : '<span class="italic text-gray-400">لم يحدد بعد</span>';
+                
+                const card = `
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition duration-300 border-t-4 border-brand-500 overflow-hidden group">
+                        <div class="p-6">
+                            <h3 class="text-xl font-bold mb-2 text-gray-800 dark:text-white flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-brand-500" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                                </svg>
+                                ${mosque.name}
+                            </h3>
+                            <div class="space-y-3">
+                                <div class="flex items-start gap-2">
+                                    <span class="text-gray-400 text-sm mt-1">الخطيب:</span>
+                                    <span class="font-medium text-gray-700 dark:text-gray-200">${mosque.khatib}</span>
+                                </div>
+                                <div class="flex items-start gap-2">
+                                    <span class="text-gray-400 text-sm mt-1">الموضوع:</span>
+                                    <span class="font-medium text-brand-600 dark:text-brand-400">${topicDisplay}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700 px-6 py-3 flex justify-between items-center">
+                            <button onclick="panToMosque(${mosque.lat}, ${mosque.lng}, '${mosque.name}')" class="text-sm text-brand-600 dark:text-brand-400 hover:text-brand-800 font-medium flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                عرض على الخريطة
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        }
+
+        function renderHistory(history) {
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '';
+            
+            history.forEach(item => {
+                const row = `
+                    <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition">
+                        <td class="py-3 px-6 whitespace-nowrap text-brand-600 dark:text-brand-400">${item.date}</td>
+                        <td class="py-3 px-6 font-medium">${item.mosque}</td>
+                        <td class="py-3 px-6">${item.khatib}</td>
+                        <td class="py-3 px-6 text-gray-500 dark:text-gray-400 italic">"${item.topic}"</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // --- 5. الخريطة (Leaflet) ---
+        let map;
+        let markers = [];
+
+        function initMap(mosques) {
+            // إحداثيات افتراضية (صفانية التقريبية)
+            // إذا كانت لديك إحداثيات دقيقة لمركز القرية، ضعها هنا
+            const defaultLat = 28.711;
+            const defaultLng = 30.751;
+
+            map = L.map('map').setView([defaultLat, defaultLng], 15);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+
+            addMarkers(mosques);
+        }
+
+        function addMarkers(mosques) {
+            // إزالة العلامات القديمة إذا وجدت
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+
+            mosques.forEach(mosque => {
+                if (mosque.lat && mosque.lng) {
+                    const marker = L.marker([mosque.lat, mosque.lng]).addTo(map);
+                    
+                    const popupContent = `
+                        <div class="text-center">
+                            <strong style="font-family: Tajawal; font-size: 16px;">${mosque.name}</strong><br>
+                            <span style="font-family: Tajawal;">الخطيب: ${mosque.khatib}</span>
+                        </div>
+                    `;
+                    
+                    marker.bindPopup(popupContent);
+                    markers.push(marker);
+                }
+            });
+        }
+
+        // وظيفة لتحريك الخريطة عند الضغط على الكارت
+        window.panToMosque = function(lat, lng, name) {
+            map.flyTo([lat, lng], 17, {
+                animate: true,
+                duration: 1.5
+            });
+            // البحث عن الماركر وفتح الـ popup
+            // (في تطبيق بسيط كهذا، يمكن تحسين البحث عن الماركر عبر تخزينه مع الـ ID)
+        };
+
+        // --- 6. التشغيل الرئيسي (Main Execution) ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            initTheme();
+            
+            // تعيين السنة في الفوتر
+            document.getElementById('year').textContent = new Date().getFullYear();
+            
+            // تعيين التاريخ
+            document.getElementById('nextFridayDate').textContent = getNextFriday();
+
+            // جلب البيانات
+            const data = await fetchData();
+            
+            // عرض البيانات الأولية
+            renderMosques(data.mosques);
+            renderHistory(data.history);
+            initMap(data.mosques);
+
+            // تفعيل البحث
+            const searchInput = document.getElementById('searchInput');
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                
+                const filteredMosques = data.mosques.filter(m => 
+                    m.name.toLowerCase().includes(term) || 
+                    m.khatib.toLowerCase().includes(term) || 
+                    m.topic.toLowerCase().includes(term)
+                );
+                
+                renderMosques(filteredMosques);
+                // تحديث الخريطة لعرض مساجد البحث فقط
+                addMarkers(filteredMosques);
+            });
+        });
+
+    </script>
+</body>
+</html>
